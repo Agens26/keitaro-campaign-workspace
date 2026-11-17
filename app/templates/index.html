@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Adrobot | Campaign workspace</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script src="/static/app.js" defer></script>
+</head>
+<body>
+  <header><div><span class="brand-mark">A</span><strong>Adrobot</strong><span class="divider">/</span><span>Campaign workspace</span></div><span class="badge">TEST ENVIRONMENT</span></header>
+  <main>
+    <div class="intro"><div><p class="eyebrow">KEITARO INTEGRATION</p><h1>Campaign workspace</h1><p>Create test campaigns and manage offer distribution with a clear review step.</p></div><button id="refresh" class="secondary">↻ Refresh data</button></div>
+    <div id="notice" class="notice" role="status" hidden></div>
+    <section class="card">
+      <div class="section-head"><div><p class="eyebrow">01 / CREATE</p><h2>New campaign</h2><p>Creates two flows: a country filter to Google and a default flow to the selected offer.</p></div></div>
+      <form id="create-form" class="form-grid">
+        <label>Campaign name<input name="name" required placeholder="test_karklins_example" pattern="test_karklin(s|sh)_[A-Za-z0-9_-]+" title="Use test_karklins_ followed by a name"></label>
+        <label>Country code<input name="country" required minlength="2" maxlength="2" placeholder="e.g. GB" style="text-transform:uppercase"></label>
+        <label>Offer<select name="offer_id" required></select></label>
+        <label>Domain<select name="domain_id" required></select></label>
+        <label>Campaign group<select name="group_id" required></select></label>
+        <label>Traffic source<select name="traffic_source_id" required></select></label>
+        <div class="form-actions"><span>Only test_karklins_ campaign names are accepted.</span><button type="submit">Create campaign <span>→</span></button></div>
+      </form>
+    </section>
+    <section class="card">
+      <div class="section-head"><div><p class="eyebrow">02 / EDIT</p><h2>Campaign streams</h2><p>Fetch a campaign to review its streams. Changes stay local until you publish them.</p></div></div>
+      <div class="toolbar"><label>Campaign<select id="campaign"></select></label><button id="fetch" class="secondary">Fetch streams</button></div>
+      <div id="streams" class="streams"><div class="empty"><strong>No streams loaded</strong><p>Select a campaign and choose Fetch streams.</p></div></div>
+    </section>
+    <footer>Drafts are stored locally. No changes are sent to Keitaro until you publish.</footer>
+  </main>
+</body></html>
