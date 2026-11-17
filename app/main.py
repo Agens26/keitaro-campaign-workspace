@@ -124,15 +124,25 @@ def create_campaign(data: CampaignIn):
     return {"id": campaign_id, "name": name}
 
 
+def campaign_drafts(db, campaign_id):
+    return db.scalars(select(StreamDraft).where(StreamDraft.campaign_id == campaign_id)).all()
+
+
 @app.post("/api/campaigns/{campaign_id}/fetch")
 def fetch_campaign(campaign_id: int):
+    with Session() as db:
+        rows = campaign_drafts(db, campaign_id)
+        if any(row.dirty for row in rows):
+            return [serialise(row) for row in rows]
+
     client = api()
     streams = client.get(f"/campaigns/{campaign_id}/streams")
     offers_by_id = {int(x["id"]): x.get("name", str(x["id"])) for x in client.get("/offers")}
     with Session() as db:
-        dirty = db.scalars(select(StreamDraft).where(StreamDraft.campaign_id == campaign_id, StreamDraft.dirty == True)).all()
-        if dirty:
-            raise HTTPException(409, "There are unpublished changes. Publish or cancel them before fetching again.")
+        rows = campaign_drafts(db, campaign_id)
+        # An edit may have arrived while Keitaro was responding.
+        if any(row.dirty for row in rows):
+            return [serialise(row) for row in rows]
         for stream in streams:
             sid = int(stream["id"])
             row = db.get(StreamDraft, sid)
@@ -156,7 +166,7 @@ def fetch_campaign(campaign_id: int):
             else:
                 row.name, row.baseline, row.draft, row.dirty = stream.get("name", str(sid)), baseline, draft, False
         db.commit()
-        rows = db.scalars(select(StreamDraft).where(StreamDraft.campaign_id == campaign_id)).all()
+        rows = campaign_drafts(db, campaign_id)
         valid_ids = {int(x["id"]) for x in streams}
         for row in rows:
             if row.stream_id not in valid_ids:
@@ -168,7 +178,7 @@ def fetch_campaign(campaign_id: int):
 @app.get("/api/campaigns/{campaign_id}/drafts")
 def get_drafts(campaign_id: int):
     with Session() as db:
-        return [serialise(x) for x in db.scalars(select(StreamDraft).where(StreamDraft.campaign_id == campaign_id)).all()]
+        return [serialise(row) for row in campaign_drafts(db, campaign_id)]
 
 
 def edit(stream_id, action):
@@ -196,6 +206,18 @@ def add_offer(stream_id: int, data: AddOffer):
     return edit(stream_id, action)
 
 
+@app.post("/api/streams/{stream_id}/offers/{offer_id}/pin")
+def pin_offer(stream_id: int, offer_id: int, data: PinOffer):
+    def change(items):
+        offer = next((x for x in items if x["offer_id"] == offer_id), None)
+        if not offer or offer.get("removed"):
+            raise ValueError("Active offer not found.")
+        offer["pinned"] = data.pinned
+        if data.pinned and data.share is not None:
+            offer["share"] = data.share
+    return edit(stream_id, change)
+
+
 @app.post("/api/streams/{stream_id}/offers/{offer_id}/{action}")
 def toggle_offer(stream_id: int, offer_id: int, action: str):
     if action not in {"remove", "restore"}:
@@ -207,18 +229,6 @@ def toggle_offer(stream_id: int, offer_id: int, action: str):
         offer["removed"] = action == "remove"
         if offer["removed"]:
             offer["pinned"] = False
-    return edit(stream_id, change)
-
-
-@app.post("/api/streams/{stream_id}/offers/{offer_id}/pin")
-def pin_offer(stream_id: int, offer_id: int, data: PinOffer):
-    def change(items):
-        offer = next((x for x in items if x["offer_id"] == offer_id), None)
-        if not offer or offer.get("removed"):
-            raise ValueError("Active offer not found.")
-        offer["pinned"] = data.pinned
-        if data.pinned and data.share is not None:
-            offer["share"] = data.share
     return edit(stream_id, change)
 
 

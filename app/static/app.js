@@ -66,6 +66,21 @@ function render(streams) {
   }
 }
 $('#refresh').onclick = loadOptions;
-$('#fetch').onclick = async () => { try { const id = Number($('#campaign').value); if (!id) throw Error('Select a campaign first.'); const data = await request(`/api/campaigns/${id}/fetch`, 'POST'); currentCampaign = id; render(data); notify('Streams fetched.'); } catch(e) { notify(e.message, true); } };
+$('#fetch').onclick = async event => {
+  const fetchButton = event.currentTarget;
+  fetchButton.disabled = true;
+  try {
+    const id = Number($('#campaign').value);
+    if (!id) throw new Error('Select a campaign first.');
+    const streams = await request(`/api/campaigns/${id}/fetch`, 'POST');
+    currentCampaign = id;
+    render(streams);
+    notify(streams.some(stream => stream.dirty) ? 'Saved draft reopened.' : 'Streams fetched.');
+  } catch (error) {
+    notify(error.message, true);
+  } finally {
+    fetchButton.disabled = false;
+  }
+};
 $('#create-form').onsubmit = async event => { event.preventDefault(); const form = event.currentTarget; const fields = Object.fromEntries(new FormData(form)); for (const key of ['offer_id','domain_id','group_id','traffic_source_id']) fields[key] = Number(fields[key]); try { const result = await request('/api/campaigns', 'POST', fields); currentCampaign = result.id; await loadOptions(); notify(`Campaign ${result.name} created (#${result.id}).`); render(await request(`/api/campaigns/${result.id}/fetch`, 'POST')); } catch(e) { notify(e.message, true); } };
 loadOptions();

@@ -73,8 +73,6 @@ class WorkflowTest(unittest.TestCase):
         response = main.add_offer(11, main.AddOffer(offer_id=3, name='Three'))
         self.assertEqual([x['share'] for x in response['offers']], [34, 33, 33])
         self.assertEqual(self.fake.writes, [])
-        with self.assertRaises(HTTPException) as error: main.fetch_campaign(1)
-        self.assertEqual(error.exception.status_code, 409)
         self.assertEqual(len(main.cancel(11)['offers']), 2)
         main.pin_offer(11, 1, main.PinOffer(pinned=True, share=25))
         result = main.add_offer(11, main.AddOffer(offer_id=3, name='Three'))
@@ -124,6 +122,28 @@ class WorkflowTest(unittest.TestCase):
         self.assertTrue(result.json()['dirty'])
         self.assertEqual(client.post('/api/streams/11/offers', json={'offer_id': 3}).status_code, 422)
         self.assertEqual(client.post('/api/streams/11/publish').status_code, 200)
+
+    def test_pin_and_reopen_draft_through_http(self):
+        with TestClient(main.app) as client:
+            self.assertEqual(client.post('/api/campaigns/1/fetch').status_code, 200)
+            result = client.post('/api/streams/11/offers/1/pin', json={'pinned': True, 'share': 25})
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertTrue(result.json()['offers'][0]['pinned'])
+            self.assertEqual([offer['share'] for offer in result.json()['offers']], [25, 75])
+            self.assertEqual(self.fake.writes, [])
+
+        with TestClient(main.app) as reopened:
+            with patch.object(main, 'api', side_effect=AssertionError('Draft recovery should not call Keitaro')):
+                result = reopened.post('/api/campaigns/1/fetch')
+            self.assertEqual(result.status_code, 200, result.text)
+            draft = next(stream for stream in result.json() if stream['stream_id'] == 11)
+            self.assertTrue(draft['dirty'])
+            self.assertEqual([offer['share'] for offer in draft['offers']], [25, 75])
+            result = reopened.post('/api/streams/11/cancel')
+            self.assertEqual(result.status_code, 200, result.text)
+            self.assertFalse(result.json()['dirty'])
+            self.assertEqual([offer['share'] for offer in result.json()['offers']], [50, 50])
+            self.assertEqual(self.fake.writes, [])
 
     def test_other_campaign_cannot_be_published(self):
         main.fetch_campaign(1)
